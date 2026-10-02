@@ -1,1 +1,3 @@
 # DSA MINI PROJECT
+2 oct 2026
+Implemented the Stack and Timeline classes
