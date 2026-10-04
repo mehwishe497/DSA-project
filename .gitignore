@@ -1,0 +1,14 @@
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+
+Browse.VC.db
+Browse.VC.db-shm
+Browse.VC.db-wal
+SERVER.ipch
+slnx.sqlite
+VSWorkspaceState.json
+*.vsuo
