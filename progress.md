@@ -8,4 +8,4 @@ PASS 0x0 implement kia hai thora sa isko samjha hai or aik function implement ki
 
 7 oct 2026
 PASS 0x0 implemneted  all function
-validate program 
+validate program samjha hai 
