@@ -16,6 +16,7 @@
 //#include <sys/socket.h>
 #include <cstdint>
 #include <cstdio>
+#include<stdexcept>
 using namespace std;
 
 // ---- Constants ----
@@ -66,22 +67,26 @@ public:
         // pop the top value on the stack
         if (isEmpty()) {
             return T();
-            Node* temp = top;
-            T val = temp->data;
-            top = top->next;
-            delete temp;
-            count--;
-            return val;
+            
         }
+        Node* temp = top;
+        T val = temp->data;
+        top = top->next;
+        delete temp;
+        count--;
+        return val;
     }
     T& peek()
     {
         // returns the top value on the stack
+        if (isEmpty()) {
+            throw std::out_of_range("EMPTY");
+        }
         return top->data;
     }
     bool isEmpty()
     {
-        return top = nullptr;
+        return top == nullptr;
 
     }
     int32_t depth()
@@ -201,6 +206,8 @@ void writeHeader(FILE* f, const TTDBHeader& h)
 {
     fwrite(h.magic, 1, 4, f);
     fwrite(&h.version, sizeof(int32_t), 1, f);
+    fwrite(&h.stepCount, sizeof(int32_t), 1, f);
+    fwrite(&h.indexOffset, sizeof(int64_t), 1, f);
 
     // placeholder for other two data members
 }
@@ -246,7 +253,28 @@ string firstWord(const string& line)
 /////////////////////////////////////////////////////////////////////////////////////////////
 string secondWord(const string& line)
 {
-    // returns the second word
+    size_t strt = line.find_first_not_of(" \t\r\n");
+    if (strt == string::npos) {
+        return "";
+
+    }
+    size_t end = line.find_first_of(" \t\r\n", s);
+    if (end == string::npos) {
+        return "";
+
+    }
+    size_t strt_2 = line.find_first_not_of(" \t\r\n", end);
+    if (strt_2== string::npos) {
+        return "";
+
+    }
+    size_t end_2 = line.find_first_of(" \t\r\n", strt_2);
+    if (end_2 == string::npos) {
+        return line.substr(strt_2);
+
+    }
+    return line.substr(strt_2, end_2 - strt_2);
+
 }
 bool validateProgram(const char* sourcePath)
 {
@@ -325,18 +353,44 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath)
 int32_t main()
 {
 
-    if (!validateProgram("source.bin"))
-    {
-        // send an error response instead of a .tdbg file
-        return 1;
+    Stack<int> s;
+    cout << "empty" << s.isEmpty() << endl;
+    s.push(10);
+    s.push(11);
+    s.push(12);
+    cout << "dep" << s.depth() << endl;
+    cout << "peek" << s.peek() << endl;
+
+    int arr[3];
+    int m = s.snapshot_into(arr, 3);
+    cout << "snap (" << n << ")";
+    for (int i = 0; i < n; i++) {
+        cout << endl;
     }
+    cout << "pop" << s.pop() << endl;
+    cout << "dep" << s.depth() << endl;
+ 
 
-    int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
 
-    Timeline timeline;
-    executeProgram("resolve.bin", mainOffset, timeline);
 
-    writeTdbg(timeline, "session.tdbg");
+
+
+
+
+
+    //if (!validateProgram("source.bin"))
+    //{
+    //    // send an error response instead of a .tdbg file
+    //    return 1;
+    //}
+
+    //int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+
+    //Timeline timeline;
+    //executeProgram("resolve.bin", mainOffset, timeline);
+
+    //writeTdbg(timeline, "session.tdbg");
+
 
     return 0;
 }
