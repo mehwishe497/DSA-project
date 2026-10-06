@@ -373,18 +373,18 @@ int32_t main()
 
 
 
-    //if (!validateProgram("source.bin"))
-    //{
-    //    // send an error response instead of a .tdbg file
-    //    return 1;
-    //}
+    if (!validateProgram("source.bin"))
+    {
+        // send an error response instead of a .tdbg file
+        return 1;
+    }
 
-    //int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+    int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
 
-    //Timeline timeline;
-    //executeProgram("resolve.bin", mainOffset, timeline);
+    Timeline timeline;
+    executeProgram("resolve.bin", mainOffset, timeline);
 
-    //writeTdbg(timeline, "session.tdbg");
+    writeTdbg(timeline, "session.tdbg");
 
 
     return 0;
