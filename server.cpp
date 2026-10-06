@@ -142,14 +142,20 @@ public:
     void record(Snapshot* s)
     {
         // add record in the timeline
-        TimelineNode* i = new TimelineNode{ s, nullptr, tail };
-        if (tail)
+        TimelineNode* i = new TimelineNode;
+        i->data = s;
+        i->next = nullptr;
+        i->prev = tail;
+
+        if (tail==nullptr)
         {
-            tail->next = i;
+
+            head = i;
+           
         }
         else
         {
-            head = i;
+            tail->next = i;
         }
         tail = i;
         stepCount++;
@@ -227,14 +233,23 @@ struct PendingPatch
 
 
 // PASS 0x0: READING source.bin + VALIDITY CHECK
+static bool blank_line(const string& s) {
+    for (size_t i = 0; i < s.size(); i++) {
+        if (!isspace(( unsigned char)s[i]))
+            return false;
+    }
+    return true;
+}
 bool readSourceLine(ifstream& in, string& out)
 {
     // reads the next nonblank line
     string line;
     while (getline(in, line)) {
-        size_t start = line.find_first_not_of(" \t\r\n");
-        if (start != string::npos) {
-            out = line.substr(start);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (!blank_line(line)) {
+            out = line;
             return true;
         }
 
@@ -244,41 +259,36 @@ bool readSourceLine(ifstream& in, string& out)
 string firstWord(const string& line)
 {
     // returns first word from the input string
-    size_t end = line.find_first_of(" \t\r\n");
-    if (end == string::npos) {
-        return line;
-    }
-    return line.substr(0, end);
+    size_t i = 0, n = line.size();
+    while (i < n && isspace((unsigned char)line[i]))
+        i++;
+    size_t start = i;
+    while (i < n && !isspace((unsigned char)line[i]))
+        i++;
+    return line.substr(start, i - start);
+
 }
-/////////////////////////////////////////////////////////////////////////////////////////////
 string secondWord(const string& line)
 {
-    size_t strt = line.find_first_not_of(" \t\r\n");
-    if (strt == string::npos) {
-        return "";
+    size_t i = 0, n = line.size();
+    while (i < n && isspace((unsigned char)line[i]))
+        i++;
+    while (i < n && !isspace((unsigned char)line[i]))
+        i++;
+    while (i < n && isspace((unsigned char)line[i]))
+        i++;
+    size_t start = i;
+    while (i < n && !isspace((unsigned char)line[i]))
+        i++;
 
-    }
-    size_t end = line.find_first_of(" \t\r\n", s);
-    if (end == string::npos) {
-        return "";
-
-    }
-    size_t strt_2 = line.find_first_not_of(" \t\r\n", end);
-    if (strt_2== string::npos) {
-        return "";
-
-    }
-    size_t end_2 = line.find_first_of(" \t\r\n", strt_2);
-    if (end_2 == string::npos) {
-        return line.substr(strt_2);
-
-    }
-    return line.substr(strt_2, end_2 - strt_2);
+    return line.substr(start, i - start);
 
 }
+/////////////////////////////////////////////////////////////////////////////////////////////
 bool validateProgram(const char* sourcePath)
 {
     // for each func defined there should be exactly one func_end and no nested funcs allowed - 
+
 }
 
 // PASS 0x1: RESOLVE() -> resolve.bin
@@ -353,22 +363,7 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath)
 int32_t main()
 {
 
-    Stack<int> s;
-    cout << "empty" << s.isEmpty() << endl;
-    s.push(10);
-    s.push(11);
-    s.push(12);
-    cout << "dep" << s.depth() << endl;
-    cout << "peek" << s.peek() << endl;
-
-    int arr[3];
-    int m = s.snapshot_into(arr, 3);
-    cout << "snap (" << n << ")";
-    for (int i = 0; i < n; i++) {
-        cout << endl;
-    }
-    cout << "pop" << s.pop() << endl;
-    cout << "dep" << s.depth() << endl;
+    
  
 
 
