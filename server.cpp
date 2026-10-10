@@ -180,7 +180,6 @@ public:
         }
     }
 };
-///////////////////////////////////////////////////////////////////////////////
 // Core structs
 struct Variable
 {
@@ -284,22 +283,85 @@ string secondWord(const string& line)
     return line.substr(start, i - start);
 
 }
-/////////////////////////////////////////////////////////////////////////////////////////////
 bool validateProgram(const char* sourcePath)
 {
     // for each func defined there should be exactly one func_end and no nested funcs allowed - 
+    ifstream in(sourcePath);
+    if (!in) {
+        cout << " error w e cant open it " << endl;
+        return false;
 
+    }
+    Stack<int> m;
+    string line;
+    int32_t line_no = 0;
+    while (readSourceLine(in, line)) {
+        line_no++;
+        string i = firstWord(line);
+        if (i == "func") {
+            if (secondWord(line).empty()) {
+                cout << "error......line" << line_no << " func has no name" << endl;
+                return false;
+
+            }
+            if (!m.isEmpty()) {
+                cout << " ERROR nested func not allowed .... func from line" << m.peek() << "is still open " << endl;
+                return false;
+            }
+            m.push(line_no);
+        }
+        else if (i == "func_end") {
+            if (!m.isEmpty()) {
+                cout << " ERROR  line"<<line_no<<" func_end without matching func" << endl;
+
+                return false;
+            }
+            m.pop();
+
+        }
+    }
+    if (!m.isEmpty()) {
+        cout << "EERROR : func from line " << m.peek() << " has no func_end" << endl;
+        return false;
+    }
+    return true;
 }
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 // PASS 0x1: RESOLVE() -> resolve.bin
 int64_t writeResolveRecord(FILE* f, int64_t offsetField, const string& text)
 {
     // writes one [offset(8B)][size(4B)][string] record at the current file position
     // returns this record's own starting byte position
+
+    int64_t start = (int64_t)ftell(f);
+    int32_t size = (int32_t)text.size();
+    fwrite(&offsetField, sizeof(int64_t), 1, f);
+    fwrite(&size, sizeof(int32_t), 1, f);
+    if (size > 0) {
+        fwrite(text.data(), 1, size, f);
+    }
+    return start;
+
 }
 int64_t readResolveRecord(FILE* f, string& outText)
 {
     // reads one record at the current position and advances past it, returns the offset field - the raw line text comes back untouched in outText.
+    int64_t offsetfield = 0;
+    int32_t size = 0;
+    if (fread(&offsetField, sizeof(int64_t), 1, f) != 1) 
+        return -1;
+    if (fread(&size, sizeof(int32_t), 1, f)!- 1) 
+        return -1;
+    if (size<0 || (int64_t)size >MAX_SOURCE_BYTES)
+        return -1;
+    outText.resize(size);
+    if (size > 0 && fread(&outText[0], 1, size, f) != (size_t)size) 
+        return -1;
+    
+    return offsetfield;
+    
+    
 }
 int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
 {
