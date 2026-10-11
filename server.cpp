@@ -57,7 +57,9 @@ public:
         if (count >= MAX_STACK_DEPTH) {
             return;
         }
-        Node* n_node = new Node{ val,top };
+        Node* n_node = new Node;
+        n->data = val;
+        n->next = top;
         top = n_node;
         count++;
 
@@ -80,7 +82,7 @@ public:
     {
         // returns the top value on the stack
         if (isEmpty()) {
-            throw std::out_of_range("EMPTY");
+            cout << "EMPTY" << endl;
         }
         return top->data;
     }
@@ -139,6 +141,7 @@ public:
         tail = nullptr;
         stepCount = 0;
     }
+    ~Timeline();
     void record(Snapshot* s)
     {
         // add record in the timeline
@@ -168,17 +171,7 @@ public:
     {
         return stepCount;
     }
-    ~Timeline()
-    {
-        TimelineNode* curr = head;
-        while (curr != nullptr)
-        {
-            TimelineNode* next = curr->next;
-            delete curr->data;
-            delete curr;
-            curr = next;
-        }
-    }
+    
 };
 // Core structs
 struct Variable
@@ -200,6 +193,17 @@ struct Snapshot
     Frame callStack[MAX_STACK_DEPTH];
     int32_t stackDepth;
 };
+Timeline::~Timeline()
+{
+    TimelineNode* curr = head;
+    while (curr != nullptr)
+    {
+        TimelineNode* next = curr->next;
+        delete curr->data;
+        delete curr;
+        curr = next;
+    }
+}
 struct TTDBHeader
 {
     char magic[4]; // "TTDB"
@@ -234,7 +238,7 @@ struct PendingPatch
 // PASS 0x0: READING source.bin + VALIDITY CHECK
 static bool blank_line(const string& s) {
     for (size_t i = 0; i < s.size(); i++) {
-        if (!isspace(( unsigned char)s[i]))
+        if (s[i] != ' ' && s[i] != '\t')
             return false;
     }
     return true;
@@ -258,29 +262,40 @@ bool readSourceLine(ifstream& in, string& out)
 string firstWord(const string& line)
 {
     // returns first word from the input string
-    size_t i = 0, n = line.size();
-    while (i < n && isspace((unsigned char)line[i]))
+    string word = "";
+    size_t i = 0;
+    while (i < line.size() && (line[i] == '' || line[i] == '\t')) {
         i++;
-    size_t start = i;
-    while (i < n && !isspace((unsigned char)line[i]))
+    }
+    while (i < line.size() && line[i] != '' || line[i] != '\t') {
+        word += line[i];
         i++;
-    return line.substr(start, i - start);
+    }
+    return word;
+
 
 }
 string secondWord(const string& line)
 {
+    string word = "";
     size_t i = 0, n = line.size();
-    while (i < n && isspace((unsigned char)line[i]))
+    //skip leadinf spaces
+    while (i < n && (line[i] == ' ' || line[i] == '\t'))
         i++;
-    while (i < n && !isspace((unsigned char)line[i]))
+    //skep first w
+    while (i < n && line[i] != ' ' || line[i] != '\t')
         i++;
-    while (i < n && isspace((unsigned char)line[i]))
+    //skip space b\w words
+    while (i < n && (line[i] == ' ' || line[i] == '\t'))
         i++;
-    size_t start = i;
-    while (i < n && !isspace((unsigned char)line[i]))
+   //merge sec word or u say collect
+    while (i < n && line[i] != ' ' || line[i] != '\t')
+    {
+        word += line[i];
         i++;
+    }
 
-    return line.substr(start, i - start);
+    return word;
 
 }
 bool validateProgram(const char* sourcePath)
@@ -294,7 +309,7 @@ bool validateProgram(const char* sourcePath)
     }
     Stack<int> m;
     string line;
-    int32_t line_no = 0;
+    int line_no = 0;
     while (readSourceLine(in, line)) {
         line_no++;
         string i = firstWord(line);
@@ -351,10 +366,11 @@ int64_t readResolveRecord(FILE* f, string& outText)
     int32_t size = 0;
     if (fread(&offsetField, sizeof(int64_t), 1, f) != 1) 
         return -1;
-    if (fread(&size, sizeof(int32_t), 1, f)!- 1) 
+    if (fread(&size, sizeof(int32_t), 1, f)!= 1) 
         return -1;
     if (size<0 || (int64_t)size >MAX_SOURCE_BYTES)
         return -1;
+    
     outText.resize(size);
     if (size > 0 && fread(&outText[0], 1, size, f) != (size_t)size) 
         return -1;
