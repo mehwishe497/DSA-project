@@ -582,7 +582,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
     }
     Stack<Frame> callstack;
     string line;
-    fseek(f, (long), mainOffset, SEEK_SET);
+    fseek(f, (long)mainOffset, SEEK_SET);
     readResolveRecord(f, line);
     Frame mainFrame;
     mainFrame.func_name = "main";
@@ -591,27 +591,41 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
     mainFrame.localCount = 0;
     callStack.push(mainFrame);
     Token tokens[MAX_TOKENS];
+    Token header[MAX_TOKENS];
     bool running = true;
 
-    while (running && readResolveRecord(f, line) != 1) {
+    while (running ) {
+        long recStart = ftell(f);                      
+        int64_t field = readResolveRecord(f, line);    
+        if (field == -1)
+            break;
         int32_t n = tokenizeLine(line, tokens, MAX_TOKENS);
         string kw = tokens[0].text;
         Frame& cur = callStack.peek();
-        bool k = true;
+        string err = "";
+        bool takeSnapshot = true;
         if (kw == "set") {
             int32_t value;
-            if (n < 3 || !getOperand(cur, tokens[2].text, value))
-                k = false;
+            if (n < 3)
+                err = "SET needs a name and a value";
+            else if (!getOperand(cur, tokens[2].text, value)) {
+                err = "unknown variable " + tokens[2].text;
+            }
             else
                 setVarValue(cur, tokens[1].text, value);
 
         }
         else if (kw == "add" || kw == "sub" || kw == "mul" || kw == "div") {
             int32_t a, b;
-            if (n < 3 || !getVarValue(cur, tokens[1].text, a) ||
-                !getOperand(cur, tokens[2].text, b)) {
-                k = false;
-            }
+            if (n < 3)
+                err = kw + " needs two operands";
+            else if (!getVarValue(cur, tokens[1].text, a))
+                err = "unknown variable " + tokens[1].text;
+            else if (!getOperand(cur, tokens[2].text, b))
+                err = "unknown variable " + tokens[2].text;
+            else if (kw == "div" && b == 0)
+                err = "division by zero";
+            
             else
             {
                 if (kw == "add")
@@ -629,29 +643,83 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
                         a = a / b;
                     }
                 }
-                if (k) {
-                    setVarValue(cur, tokens[1].text, a);
-                }
+                setVarValue(cur, tokens[1].text, a);
             }
-            if (!k && b == 0 && kw == "div") {
-                /*cout << "ERROR ZERO DIViSION in line" << line << endl;
-                k = false;*/
+            
+        }
+        else if (kw == "call") {
+            if (n < 2)
+                err = "call needs a function name";
+            else if (callStack.depth() >= MAX_STACK_DEPTH)
+                err = "stack overflow";
+            else {
+                Frame newFrame;
+                newFrame.func_name = tokens[1].text;
+                newFrame.argc = 0;
+                newFrame.localCount = 0;
+                newFrame.returnLine = (int32_t)recStart;
+                fseek(f, (long)field, SEEK_SET);
+                string headerLine;
+                readResolveRecord(f, headerLine);
+                int32_t hn = tokenizeLine(headerLine, header, MAX_TOKENS);
+                if (hn - 2 != n - 2) {
+                    err = "wrong number of arguments for " + tokens[1].text;
+                }
+                else {
+                    for (int i = 0; i < n - 2; i++)
+                    {
+                        int32_t v;
+                        if (!getOperand(cur, tokens[2 + i].text, v))
+                        {
+                            err = "unknown variable " + tokens[2 + i].text;
+                            break;
+                        }
+                        newFrame.argv[i].name = header[2 + i].text;
+                        newFrame.argv[i].value = v;
+                        newFrame.argc++;
+                    }
+                    if (err == "")
+                        callstack.push(newFrame);
+                }
             }
         }
         else if (kw == "func_end") {
-            running = false;
-            continue;
+            if (callStack.depth() == 1)
+            {
+                running = false;                     
+                takeSnapshot = false;
+            }
+            else {
+                Frame callee = callStack.pop();
+                Frame& caller = callStack.peek();
+                fseek(f, (long)callee.returnLine, SEEK_SET);
+                string callLine;
+                readResolveRecord(f, callLine);        
+                int32_t cn = tokenizeLine(callLine, header, MAX_TOKENS);
+
+                for (int i = 0; i < callee.argc && 2 + i < cn; i++) {
+                    if (!isNumber(header[2 + i].text))
+                        setVarValue(caller, header[2 + i].text, callee.argv[i].value);
+                }
+
+            }
         }
-        else {
-            ////////////////////
-        }
-        if (!ok)
-            running = false;
         else
+        {
+            err = "unknown instruction " + kw;
+        }
+
+        if (err != "")
+        {
+            cout << "Error: " << err << "------  " << line << endl;
+            running = false;
+        }
+        else if (takeSnapshot)
+        {
             timeline.record(buildSnapshot(callStack));
+        }
     }
     fclose(f);
-    
 }
 
 // PASS 0x3: SERIALIZE TIMELINE
