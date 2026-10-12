@@ -24,9 +24,7 @@ i have implemented  resolveProgram
 i ahve made few helper functions named as getVarValue and setVarValue
 
 
-13 oct 2026
-finally done my projectttttttttttttttttttttttttttttttttttttttt
-now running tests my spacing is thori si uper neechay uskay lia maafi 
+
 13 oct 2026
 finally done my projectttttttttttttttttttttttttttttttttttttttt
 now running tests my spacing is thori si uper neechay uskay lia maafi 
