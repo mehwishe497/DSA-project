@@ -22,3 +22,12 @@ its already 11 october now
 12 oct 2026
 i have implemented  resolveProgram
 i ahve made few helper functions named as getVarValue and setVarValue
+
+
+13 oct 2026
+finally done my projectttttttttttttttttttttttttttttttttttttttt
+now running tests my spacing is thori si uper neechay uskay lia maafi 
+13 oct 2026
+finally done my projectttttttttttttttttttttttttttttttttttttttt
+now running tests my spacing is thori si uper neechay uskay lia maafi 
+KHATAMMMM FINALLYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY please  ASA PROJECT PHIR SAY NA DIJIA GAAAAAAAAAAAAAAAAAAAAAAAAAAA
