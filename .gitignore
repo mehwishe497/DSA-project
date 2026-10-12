@@ -12,3 +12,8 @@ SERVER.ipch
 slnx.sqlite
 VSWorkspaceState.json
 *.vsuo
+*.exe
+*.obj
+resolve.bin
+session.tdbg
+.vs/

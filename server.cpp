@@ -580,7 +580,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
         cout << " ERROR camt open resolve.bin" << endl;
         return;
     }
-    Stack<Frame> callstack;
+    Stack<Frame> callStack;
     string line;
     fseek(f, (long)mainOffset, SEEK_SET);
     readResolveRecord(f, line);
@@ -635,13 +635,9 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
                 else if (kw == "mul")
                     a = a * b;
                 else {
-                    if (b == 0) {
-                        cout << "ERROR ZERO DIViSION in line" << line << endl;
-                        k = false;
-                    }
-                    else {
+                    
                         a = a / b;
-                    }
+                    
                 }
                 setVarValue(cur, tokens[1].text, a);
             }
@@ -679,7 +675,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
                         newFrame.argc++;
                     }
                     if (err == "")
-                        callstack.push(newFrame);
+                        callStack.push(newFrame);
                 }
             }
         }
@@ -698,7 +694,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
                 int32_t cn = tokenizeLine(callLine, header, MAX_TOKENS);
 
                 for (int i = 0; i < callee.argc && 2 + i < cn; i++) {
-                    if (!isNumber(header[2 + i].text))
+                    if (!is_num(header[2 + i].text))
                         setVarValue(caller, header[2 + i].text, callee.argv[i].value);
                 }
 
@@ -723,6 +719,34 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
 }
 
 // PASS 0x3: SERIALIZE TIMELINE
+void writeInt(FILE* f, int32_t v)
+{
+    fwrite(&v, sizeof(int32_t), 1, f);
+}
+void writeStr(FILE* f, const string& s)
+{
+    int32_t len = (int32_t)s.size();
+    fwrite(&len, sizeof(int32_t), 1, f);
+    if (len > 0)
+        fwrite(s.data(), 1, len, f);
+}
+void writeFrame(FILE* f, const Frame& fr)
+{
+    writeStr(f, fr.func_name);
+    writeInt(f, fr.argc);
+    for (int i = 0; i < fr.argc; i++)
+    {
+        writeStr(f, fr.argv[i].name);
+        writeInt(f, fr.argv[i].value);
+    }
+    writeInt(f, fr.returnLine);
+    writeInt(f, fr.localCount);
+    for (int i = 0; i < fr.localCount; i++)
+    {
+        writeStr(f, fr.locals[i].name);
+        writeInt(f, fr.locals[i].value);
+    }
+}
 void writeTdbg(Timeline& timeline, const char* tdbgPath)
 {
     // placeholder for header
@@ -730,34 +754,75 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath)
     // placing each snapshot in the file while maintaining the index(starting point of each nth snapshot)
     // after timeline add the index array i the file
     // update the header
+    FILE* f = fopen(tdbgPath, "wb");
+    if (f == NULL) {
+        cout << "Error cant create " << tdbgPath << endl;
+        return;
+    }
+    int32_t steps = timeline.getStepCount();
+    TTDBHeader h;
+    h.magic[0] = 'T';
+    h.magic[1] = 'T';
+    h.magic[2] = 'D';
+    h.magic[3] = 'B';
+    h.version = 1;
+    h.stepCount = steps;
+    h.indexOffset = 0;
+    writeHeader(f, h);
+
+    int64_t* index = new int64_t[steps];
+    int i = 0;
+    for (TimelineNode* node = timeline.begin(); node != nullptr; node = node->next)
+    {
+        index[i] = ftell(f);
+        i++;
+
+        Snapshot* s = node->data;
+        writeInt(f, s->stackDepth);
+        for (int d = 0; d < s->stackDepth; d++)
+        {
+            writeFrame(f, s->callStack[d]);
+        }
+    }
+    h.indexOffset = ftell(f);
+    if (steps > 0)
+    {
+        fwrite(index, sizeof(int64_t), steps, f);
+    }
+
+    fseek(f, 0, SEEK_SET);
+    writeHeader(f, h);
+    fclose(f);
+    delete[]index;
+
+
+
+
+
 }
 // main section
+
 int32_t main()
 {
-
-    
- 
-
-
-
-
-
-
-
-
     if (!validateProgram("source.bin"))
     {
-        // send an error response instead of a .tdbg file
+        cout << "Validation failed" << endl;
         return 1;
     }
 
     int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+    if (mainOffset == -1)
+    {
+        cout << "Resolve failed" << endl;
+        return 1;
+    }
 
     Timeline timeline;
     executeProgram("resolve.bin", mainOffset, timeline);
 
     writeTdbg(timeline, "session.tdbg");
-
+    cout << "steps recorded: " << timeline.getStepCount() << endl;
+    cout << "session.tdbg written" << endl;
 
     return 0;
 }
