@@ -18,3 +18,7 @@ to implement those functions
 i am done first function of it 
 second toooooooooooooooooooooooooooooooo
 its already 11 october now 
+
+12 oct 2026
+i have implemented  resolveProgram
+i ahve made few helper functions named as getVarValue and setVarValue

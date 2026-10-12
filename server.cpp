@@ -57,10 +57,10 @@ public:
         if (count >= MAX_STACK_DEPTH) {
             return;
         }
-        Node* n_node = new Node;
+        Node* n = new Node;
         n->data = val;
         n->next = top;
-        top = n_node;
+        top = n;
         count++;
 
     }
@@ -81,9 +81,6 @@ public:
     T& peek()
     {
         // returns the top value on the stack
-        if (isEmpty()) {
-            cout << "EMPTY" << endl;
-        }
         return top->data;
     }
     bool isEmpty()
@@ -263,11 +260,11 @@ string firstWord(const string& line)
 {
     // returns first word from the input string
     string word = "";
-    size_t i = 0;
-    while (i < line.size() && (line[i] == '' || line[i] == '\t')) {
+    size_t i = 0, n = line.size();
+    while (i < n  && (line[i] == ' ' || line[i] == '\t')) {
         i++;
     }
-    while (i < line.size() && line[i] != '' || line[i] != '\t') {
+    while (i < n && line[i] != ' ' && line[i] != '\t') {
         word += line[i];
         i++;
     }
@@ -283,13 +280,13 @@ string secondWord(const string& line)
     while (i < n && (line[i] == ' ' || line[i] == '\t'))
         i++;
     //skep first w
-    while (i < n && line[i] != ' ' || line[i] != '\t')
+    while (i < n && line[i] != ' ' && line[i] != '\t')
         i++;
     //skip space b\w words
     while (i < n && (line[i] == ' ' || line[i] == '\t'))
         i++;
    //merge sec word or u say collect
-    while (i < n && line[i] != ' ' || line[i] != '\t')
+    while (i < n && line[i] != ' ' && line[i] != '\t')
     {
         word += line[i];
         i++;
@@ -315,7 +312,7 @@ bool validateProgram(const char* sourcePath)
         string i = firstWord(line);
         if (i == "func") {
             if (secondWord(line).empty()) {
-                cout << "error......line" << line_no << " func has no name" << endl;
+                cout << "error......line " << line_no << " func has no name " << endl;
                 return false;
 
             }
@@ -326,7 +323,7 @@ bool validateProgram(const char* sourcePath)
             m.push(line_no);
         }
         else if (i == "func_end") {
-            if (!m.isEmpty()) {
+            if (m.isEmpty()) {
                 cout << " ERROR  line"<<line_no<<" func_end without matching func" << endl;
 
                 return false;
@@ -364,11 +361,11 @@ int64_t readResolveRecord(FILE* f, string& outText)
     // reads one record at the current position and advances past it, returns the offset field - the raw line text comes back untouched in outText.
     int64_t offsetfield = 0;
     int32_t size = 0;
-    if (fread(&offsetField, sizeof(int64_t), 1, f) != 1) 
+    if (fread(&offsetfield, sizeof(int64_t), 1, f) != 1) 
         return -1;
     if (fread(&size, sizeof(int32_t), 1, f)!= 1) 
         return -1;
-    if (size<0 || (int64_t)size >MAX_SOURCE_BYTES)
+    if (size<0 || (uint64_t)size >MAX_SOURCE_BYTES)
         return -1;
     
     outText.resize(size);
@@ -393,6 +390,62 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
     // with its target's position. Patching happens after the full write
     // Returns the byte offset of main's FUNC header record.
     // if there is no main return the error 
+
+    ifstream in(sourcePath);
+    if (!in) {
+        cout << " ERROR cant open this file " << endl;
+        return -1;
+
+    }
+    FILE* f = fopen(resolveBinPath, "w+b");
+    if (f == NULL) {
+        cout << " ERROR cant make resolve.bin" << endl;
+        return -1;
+    }
+    int64_t offset = 0;
+    string line;
+    while (readSourceLine(in, line)) {
+        string word = firstWord(line);
+        if (word == "call") {
+            patches[patchCount].byteOffsetOfOffsetField = offset;
+            patches[patchCount].targetFuncName = secondWord(line);
+            patchCount++;
+            writeResolveRecord(f, 0, line);
+        }
+        else
+        {
+            if (word == "func")
+            {
+                funcArray[funcCount].funcName = secondWord(line);
+                funcArray[funcCount].byteOffsetInResolveBin = offset;
+                funcCount++;
+            }
+            writeResolveRecord(f, offset, line);
+        }
+        offset = offset + 8 + 4 + line.size();
+    }
+    for (int i = 0; i < patchCount; i++) {
+        int64_t target = -1;
+        for (int j = 0; j < funcCount; j++) {
+            if (funcArray[j].funcName == patches[i].targetFuncName)
+                target = funcArray[j].byteOffsetInResolveBin;
+        }
+        if (target == -1) {
+            cout << " ERROR " << patches[i].targetFuncName << endl;
+            fclose(f);
+            return -1;
+        }
+        fseek(f, patches[i].byteOffsetOfOffsetField, SEEK_SET);
+        fwrite(&target, sizeof(int64_t), 1, f);
+
+    }
+    fclose(f);
+    for (int i = 0; i < funcCount; i++) {
+        if (funcArray[i].funcName == "main")
+            return funcArray[i].byteOffsetInResolveBin;
+    }
+    cout << "ERROR NO MAIN FUNCTION " << endl;
+    return -1;
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
@@ -413,11 +466,107 @@ int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
     // instruction set = [func, func_end, call, set, add, sub, mul and div]
     // next word is identifier like name of a function, variable name
     // after identifier all are the params/arg, space separated
+    int32_t count = 0;
+    size_t i = 0;
+    while (i < line.size() && count < maxTokens) {
+        while (i < line.size() && (line[i] == ' ' || line[i] == '\t'))
+            i++;
+        if (i >= line.size()) {
+            break;
+        }
+        string word = "";
+        while (i < line.size() && line[i] != ' ' && line[i] != '\t') {
+            word += line[i];
+            i++;
+        }
+        if (count == 0) {
+            tokens[count].type = KEYWORD;
+        }
+        else if (count == 1) {
+            tokens[count].type = IDENTIFIER;
+        }
+        else {
+            tokens[count].type = PARAM;
+        }
+        tokens[count].text = word;
+        count++;
+    }
+    return count;
 }
 Snapshot* buildSnapshot(Stack<Frame>& callStack)
 {
     // build the snapshot based on the callStack given
+    Snapshot* s = new Snapshot();
+    s->stackDepth = callStack.snapshot_into(s->callStack, MAX_STACK_DEPTH);
+    return s;
 }
+bool getVarValue(Frame& fr, const string& name, int32_t& value) {
+    for (int i = 0; i < fr.argc; i++) {
+        if (fr.argv[i].name == name) {
+            value = fr.argv[i].value;
+            return true;
+        }
+    }
+    for (int i = 0; i < fr.localCount; i++) {
+        if (fr.locals[i].name == name) {
+            value = fr.locals[i].value;
+            return true;
+        }
+    }
+    return false;
+}
+void setVarValue(Frame& fr, const string& name, int32_t value) {
+    for (int i = 0; i < fr.argc; i++)
+    {
+        if (fr.argv[i].name == name)
+        {
+            fr.argv[i].value = value;
+            return;
+        }
+    }
+    for (int i = 0; i < fr.localCount; i++) {
+        if (fr.locals[i].name == name) {
+            fr.locals[i].value = value;
+            return;
+        }
+    }
+    if (fr.localCount < MAX_VARS_PER_FRAME) {
+        fr.locals[fr.localCount].name = name;
+        fr.locals[fr.localCount].value = value;
+        fr.localCount++;
+
+    }
+}
+bool is_num(const string& s) {
+    if (s.empty()) {
+        return false;
+    }
+    size_t i = 0;
+    if (s[0] == '-') {
+        i = 1;
+    }
+    if (i >= s.size()) {
+        return false;
+    }
+    for (; i < s.size(); i++)
+    {
+        if (s[i] < '0' || s[i] > '9')
+            return false;
+    }
+    return true;
+}
+
+bool getOperand(Frame& fr, const string& text, int32_t& value) {
+    if (is_num(text))
+    {
+        value = stoi(text);
+        return true;
+    }
+    return getVarValue(fr, text, value);
+
+}
+
+
 void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& timeline)
 {
     // initialize the call stack
@@ -426,6 +575,83 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
 
     // implementation:
     // execute line by line, and according to the keyword perform action
+    FILE* f = fopen(resolveBinPath, "rb");
+    if (f == NULL) {
+        cout << " ERROR camt open resolve.bin" << endl;
+        return;
+    }
+    Stack<Frame> callstack;
+    string line;
+    fseek(f, (long), mainOffset, SEEK_SET);
+    readResolveRecord(f, line);
+    Frame mainFrame;
+    mainFrame.func_name = "main";
+    mainFrame.argc = 0;
+    mainFrame.returnLine = 0;
+    mainFrame.localCount = 0;
+    callStack.push(mainFrame);
+    Token tokens[MAX_TOKENS];
+    bool running = true;
+
+    while (running && readResolveRecord(f, line) != 1) {
+        int32_t n = tokenizeLine(line, tokens, MAX_TOKENS);
+        string kw = tokens[0].text;
+        Frame& cur = callStack.peek();
+        bool k = true;
+        if (kw == "set") {
+            int32_t value;
+            if (n < 3 || !getOperand(cur, tokens[2].text, value))
+                k = false;
+            else
+                setVarValue(cur, tokens[1].text, value);
+
+        }
+        else if (kw == "add" || kw == "sub" || kw == "mul" || kw == "div") {
+            int32_t a, b;
+            if (n < 3 || !getVarValue(cur, tokens[1].text, a) ||
+                !getOperand(cur, tokens[2].text, b)) {
+                k = false;
+            }
+            else
+            {
+                if (kw == "add")
+                    a = a + b;
+                else if (kw == "sub")
+                    a = a - b;
+                else if (kw == "mul")
+                    a = a * b;
+                else {
+                    if (b == 0) {
+                        cout << "ERROR ZERO DIViSION in line" << line << endl;
+                        k = false;
+                    }
+                    else {
+                        a = a / b;
+                    }
+                }
+                if (k) {
+                    setVarValue(cur, tokens[1].text, a);
+                }
+            }
+            if (!k && b == 0 && kw == "div") {
+                /*cout << "ERROR ZERO DIViSION in line" << line << endl;
+                k = false;*/
+            }
+        }
+        else if (kw == "func_end") {
+            running = false;
+            continue;
+        }
+        else {
+            ////////////////////
+        }
+        if (!ok)
+            running = false;
+        else
+            timeline.record(buildSnapshot(callStack));
+    }
+    fclose(f);
+    
 }
 
 // PASS 0x3: SERIALIZE TIMELINE
