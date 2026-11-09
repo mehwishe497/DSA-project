@@ -9,13 +9,6 @@ PASS 0x0 implement kia hai thora sa isko samjha hai or aik function implement ki
 7 oct 2026
 PASS 0x0 implemneted  all function
 validate program samjha hai 
-9 nov 2026
-done helper.h 
-firstly got so many problems realted how to work on vs code and c++ code per kesay chalani phir tap wala scence bhi tha 
-
-10nov2026
-few function done of load_balncer.cpp
-socket wlay tak ig
 
 
 
@@ -29,6 +22,16 @@ its already 11 october now
 12 oct 2026
 i have implemented  resolveProgram
 i ahve made few helper functions named as getVarValue and setVarValue
+
+
+9 nov 2026
+done helper.h 
+firstly got so many problems realted how to work on vs code and c++ code per kesay chalani phir tap wala scence bhi tha 
+
+10nov2026
+few function done of load_balncer.cpp
+socket wlay tak ig
+
 
 
 
