@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "label": "DSA-project",
+  "include": [
+    "**/*.{c,h,cpp,cc,cxx,hpp,hh,hxx,py,pyw,ipynb,java,kt,kts,js,jsx,mjs,cjs,ts,tsx,cs,go,rs,rb,php,swift,m,mm,sql,html,htm,css,scss,sass,less,sh,bash,zsh,ps1,r,jl,hs,ml,mli,scala,lua,dart,asm,s,vhd,vhdl,v,sv,md,txt,json,yaml,yml,toml,xml,gradle,cmake,mk}",
+    "**/Makefile",
+    "**/makefile",
+    "**/CMakeLists.txt",
+    "**/Dockerfile"
+  ],
+  "exclude": [
+    "**/.git/**",
+    "**/.tap/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/__pycache__/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/out/**",
+    "**/target/**",
+    "**/bin/**",
+    "**/obj/**",
+    "**/.idea/**",
+    "**/.vscode-test/**",
+    "**/.pnpm-store/**"
+  ],
+  "maxFileSizeKB": 1024
+}

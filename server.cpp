@@ -702,7 +702,7 @@ void executeProgram(const char* resolveBinPath, int64_t mainOffset, Timeline& ti
         }
         else
         {
-            err = "unknown instruction " + kw;
+            err = "unknown " + kw;
         }
 
         if (err != "")
