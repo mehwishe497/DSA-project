@@ -30,26 +30,31 @@
 #include <thread>
 #include<ctime>
 #include <mutex>
+#include<vector>
 // #include <unistd.h>
 #include <signal.h>
 // #include <sys/socket.h>
 #ifndef _WIN32
  #include <netinet/in.h>
  #include <arpa/inet.h>
- #endif
+ #include<WinSock2.h>
+ #include<WS2tcpip.h>
+#endif
+ 
+ 
 #include "helper.h"
 using namespace std;
 
 
 // ---- Constants ----
 const char *SERVER_PATH = "./server";      // the program we start when the server is down
-const int IO_BUFFER_SIZE = 64 * 1024;      // fixed buffer for moving bytes
+// const int IO_BUFFER_SIZE = 64 * 1024;      // fixed buffer for moving bytes
 const int LISTEN_BACKLOG = 16;             // connections the OS holds until accept() takes them
 const int MAX_PENDING_CLIENTS = 8;         // clients allowed to wait in our queue. More than this get "server busy".
 const int STARTUP_MAX_ATTEMPTS = 50;       // after starting the server, how many times we try to connect
 const int STARTUP_POLL_INTERVAL_MS = 100;  // wait between those tries (50 x 100 ms = 5 seconds in total)
 int lbPort = 5000;
-string serverHost = "127.0.0.0";
+string serverHost = "127.0.0.1";
 int serverPort = 5001;
 
 
@@ -141,17 +146,29 @@ mutex queueMutex;
 sig_atomic_t flag = 1;
 
 
-// ---- Basic socket helpers ----
-bool sendAll(int sock, const char *buf, size_t n) 
-{
-    // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
-    // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
+// // ---- Basic socket helpers ----
+// bool sendAll(int sock, const char *buf, size_t n) 
+// {
+//     // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
+//     // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
+//      size_t total=0;
+//     //  while(total<n){
+//     //     int sent=send(sock,buf+total,(int)(n-total),0);
+//      }
+
     
-}
+
 bool sendError(int sock, const string &message)
 {
     // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
     // For an error: send one byte with value 1, then the message text. 
+    string msg =string(1,STATUS_ERROR)+message;
+    uint32_t crc=crcUpdate(0xFFFFFFFF,msg.data(),msg.size());
+    crc=crcFinish(crc);
+    if(!sendAll(sock,msg.data(),msg.size())){
+        return false;
+    }
+    return sendAll(sock,(const char *)&crc,4);
 }
 int createListenSocket(int port)
 { 
@@ -159,11 +176,45 @@ int createListenSocket(int port)
     // set SO_REUSEADDR so we can restart the load balancer right away.
     // bind() to the port on any address, then listen(LISTEN_BACKLOG).
     // If bind or listen fails, print the error and exit, because without this socket we cannot work.
+    int sock=socket(AF_INET,SOCK_STREAM,0);
+    if(sock<0){
+        cout<<"ERROR: cant create socket"<<endl;
+        exit(1);
+    }
+    int yes=1;
+    setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(const char *)&yes, sizeof(yes));
+    sockaddr_in addr;
+    memset(&addr,0,sizeof(addr));
+    addr.sin_family=AF_INET;
+    addr.sin_addr.s_addr=htonl(INADDR_ANY);
+    addr.sin_port=htonl(port);
+
+    if(bind(sock,(sockaddr *)&addr,sizeof(addr))<0){
+        cout<<"ERROR: cannot listen"<<endl;
+        exit(1);
+    }
+    return sock;
+    
 }
 int connectToServer(const char *host, int port)
 {
     // Create a TCP socket (SOCK_CLOEXEC) and connect it to host:port.
     // Return the socket, or -1 if the connection fails 
+    int sock=socket(AF_INET,SOCK_STREAM,0);
+    if(sock<0){
+        return-1;
+    }
+    sockaddr_in addr;
+    memset(&addr,0,sizeof(addr));
+    addr.sin_family=AF_INET;
+    addr.sin_addr.s_addr=inet_addr(host);
+    addr.sin_port=htons(port);
+    if(connect(sock,(sockaddr *)&addr,sizeof(addr))<0){
+        closeSocket(sock);
+        return-1;
+    }
+    return sock;
+
 }
 
 // =============================================================================================

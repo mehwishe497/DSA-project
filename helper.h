@@ -1,8 +1,25 @@
 #pragma once
 
-
+#include<string>
+#include<cstdint>
+#include<cstring>
+#ifdef _WIN32
+#include<winsock.h>
+#define MSG_NOSIGNAL 0
+#define SHUT_WR SD_SEND
+#define closeSocket closesocket
+#else
+#include <unistd.h>
+#include<sys/socket.h>
+#define closeSocket close
+#endif
+using namespace std;
 // Helper.h should contain the structs, functions, constants, etc. that are used more than one time in the project. For example, the structs that are used in both server and client, the constants that are used in all three files. 
-
+const int32_t IO_BUFFER_SIZE=64*1024;
+const int MAX_VARS_PER_FRAME=16;
+const int MAX_STACK_DEPTH=64;
+const char STATUS_OK=0;
+const char STATUS_ERROR=1;
 struct FuncEntry
 {
     string funcName;
@@ -12,4 +29,116 @@ struct PendingPatch
 {
     int64_t byteOffsetOfOffsetField; // where in resolve.bin to seek back and overwrite
     string targetFuncName;
+};
+struct Variable
+{
+    string name;
+    int32_t value;
+};
+struct Frame
+{
+    string func_name;
+    int32_t argc;
+    Variable argv[MAX_VARS_PER_FRAME];
+    int32_t returnLine;
+    Variable locals[MAX_VARS_PER_FRAME];
+    int32_t localCount;
+};
+struct Snapshot
+{
+    Frame callStack[MAX_STACK_DEPTH];
+    int32_t stackDepth;
+};
+struct TTDBHeader 
+{
+    char magic[4]; // "TTDB"
+    int32_t version;
+    int32_t stepCount;
+    int64_t indexOffset;
+};
+void startNetwork(){
+    #ifdef _WIN32
+        WSADATA data;
+        WSAStartup(MAKEWORD(2,2),&data);
+    #endif
+}
+bool sendAll(int sock, const char *buf, size_t n) 
+{
+    // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
+    // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
+     size_t total=0;
+     while(total<n){
+        int sent=send(sock,buf+total,(int)(n-total),MSG_NOSIGNAL);
+        if(sent<=0){
+            return false;
+        }
+        total=total+sent;
+     }
+     return true;
+ }
+ 
+bool recvAll(int sock, char *buf, size_t n)
+{
+    // recv() can return fewer bytes than asked for, so keep calling it until exactly n bytes are read.
+    // Return false if the connection closes or fails before n bytes arrive.
+    size_t got=0;
+    while(got<n){
+        int r=recv(sock,buf+got,(int)(n-got),0);
+        if(r<=0){
+            return false;
+        }
+        got=got+r;
+    }
+     return true;
+}
+uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
+    for(size_t i=0;i<n;i++){
+        crc=crc^(unsigned char )data[i];
+        for(int bit=0;bit<8;bit++){
+            if(crc&1){
+                crc=(crc>>1)^0xEDB88320;
+
+            }
+            else{
+                crc=crc>>1;
+            }
+        }
+
+    }
+    return crc;
+}
+uint32_t crcFinish(uint32_t crc){
+    return crc^0xFFFFFFFF;
+}
+
+
+
+class TailerChecker{
+    uint32_t crc;
+    string held;
+ public:
+    TailerChecker(){
+        crc=0xFFFFFFFF;
+    }
+    string feed(const char *data, size_t n){
+        held.append(data,n);
+        string body="";
+        if(held.size()>4){
+            size_t extra= held.size()-4;
+            body =held.substr(0,extra);
+            crc=crcUpdate(crc,body.data(),extra);
+            held.erase(0,extra);
+        }
+        return body;
+    }
+    bool verify(){
+        if(held.size()!=4){
+            return false;
+        }
+        uint32_t sort;
+        memcpy(&sort,held.data(),4);
+        return sort==crcFinish(crc);
+    }
+
+
 };
