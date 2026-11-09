@@ -17,3 +17,6 @@ VSWorkspaceState.json
 resolve.bin
 session.tdbg
 .vs/
+received.bin
+ttdb_last.tdbg 
+ttdb_other.tdbg
