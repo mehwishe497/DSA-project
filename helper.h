@@ -6,7 +6,8 @@
 #include<cstdint>
 #include<cstring>
 #ifdef _WIN32
-#include<winsock.h>
+#include<winsock2.h>
+#include<WS2tcpip.h>
 #pragma comment (lib,"ws2_32.lib")
 #define MSG_NOSIGNAL 0
 #define SHUT_WR SD_SEND
@@ -60,13 +61,13 @@ struct TTDBHeader
     int32_t stepCount;
     int64_t indexOffset;
 };
-void startNetwork(){
+inline void startNetwork(){
     #ifdef _WIN32
         WSADATA data;
         WSAStartup(MAKEWORD(2,2),&data);
     #endif
 }
-bool sendAll(int sock, const char *buf, size_t n) 
+inline bool sendAll(int sock, const char *buf, size_t n) 
 {
     // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
     // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
@@ -81,7 +82,7 @@ bool sendAll(int sock, const char *buf, size_t n)
      return true;
  }
  
-bool recvAll(int sock, char *buf, size_t n)
+inline bool recvAll(int sock, char *buf, size_t n)
 {
     // recv() can return fewer bytes than asked for, so keep calling it until exactly n bytes are read.
     // Return false if the connection closes or fails before n bytes arrive.
@@ -95,7 +96,7 @@ bool recvAll(int sock, char *buf, size_t n)
     }
      return true;
 }
-uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
+inline uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
     for(size_t i=0;i<n;i++){
         crc=crc^(unsigned char )data[i];
         for(int bit=0;bit<8;bit++){
@@ -111,7 +112,7 @@ uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
     }
     return crc;
 }
-uint32_t crcFinish(uint32_t crc){
+inline uint32_t crcFinish(uint32_t crc){
     return crc^0xFFFFFFFF;
 }
 
@@ -151,7 +152,7 @@ class TrailerChecker{
 };
 bool sendError(int sock,const string &message);
 int createListenSocket(int port);
-int connectToHost(const char *host,int port){
+inline int connectToHost(const char *host,int port){
     int sock=socket(AF_INET,SOCK_STREAM,0);
     if(sock<0){
        return -1;
