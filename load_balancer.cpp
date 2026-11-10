@@ -31,14 +31,28 @@
 #include<ctime>
 #include <mutex>
 #include<vector>
+#include<chrono>
 // #include <unistd.h>
 #include <signal.h>
 // #include <sys/socket.h>
-#ifndef _WIN32
- #include <netinet/in.h>
- #include <arpa/inet.h>
- #include<WinSock2.h>
- #include<WS2tcpip.h>
+// #ifndef _WIN32
+//  #include <netinet/in.h>
+//  #include <arpa/inet.h>
+//  #include<WinSock2.h>
+//  #include<WS2tcpip.h>
+// #endif
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
 #endif
  
  
@@ -187,12 +201,16 @@ int createListenSocket(int port)
     memset(&addr,0,sizeof(addr));
     addr.sin_family=AF_INET;
     addr.sin_addr.s_addr=htonl(INADDR_ANY);
-    addr.sin_port=htonl(port);
+    addr.sin_port=htons(port);
 
     if(bind(sock,(sockaddr *)&addr,sizeof(addr))<0){
         cout<<"ERROR: cannot listen"<<endl;
         exit(1);
     }
+    if(listen(sock,LISTEN_BACKLOG)<0){
+        cout<<"ERROR: listen faied"<<endl;
+    }
+    cout<<" Server listening on port"<<endl;
     return sock;
     
 }
@@ -207,8 +225,15 @@ int connectToServer(const char *host, int port)
     sockaddr_in addr;
     memset(&addr,0,sizeof(addr));
     addr.sin_family=AF_INET;
-    addr.sin_addr.s_addr=inet_addr(host);
+ 
     addr.sin_port=htons(port);
+    addr.sin_addr.s_addr=inet_addr(host);
+    if(addr.sin_addr.s_addr==INADDR_NONE){
+        cout<<"invalid IP address"<<endl;
+        closeSocket(sock);
+        return -1;
+    }
+   
     if(connect(sock,(sockaddr *)&addr,sizeof(addr))<0){
         closeSocket(sock);
         return-1;
@@ -228,6 +253,12 @@ bool startServer(int port)
     //   Example: "./server 5001 &"
     // Call system() with it.
     // Return true if system() returned 0, otherwise false.
+    #ifdef _WIN32
+        string command ="start/B server.exe"+to_string(port);
+    #else
+        string command="./server "+ to_string(port)+"&";
+    #endif
+        return system(command.c_str())==0;
 }
 int connectToServerWithWakeup()
 {
@@ -235,6 +266,21 @@ int connectToServerWithWakeup()
     // 2. Otherwise call startServer(). If it fails, return -1.
     // 3. Try connectToServer() up to STARTUP_MAX_ATTEMPTS times 
     // 4. Return the first working socket, or -1 if the server never came up.
+    int s=connectToHost(serverHost.c_str(),serverPort);
+    if(s!=-1){
+        return s;
+    }
+    if(!startServer(serverPort)){
+        return -1;
+    }
+    for(int i=0;i<STARTUP_MAX_ATTEMPTS;i++){
+        this_thread::sleep_for(chrono::milliseconds(STARTUP_POLL_INTERVAL_MS));
+        s=connectToHost(serverHost.c_str(),serverPort);
+            if(s!=-1){
+              return s;
+            }
+        }
+        return -1;
 }
 
 
@@ -253,6 +299,66 @@ void relayOneClient(ClientInfo &c)
     // 5. Server -> client: repeat recv() from serverSock and sendAll() to clientSock.
     //    Stop when recv() returns 0 (the server sent its whole reply and closed) or fails.
     // 6. Close both sockets.
+
+  int serverSock=connectToServerWithWakeup();
+  if(serverSock==-1){
+    sendError(c.sock,"backend server failed to start ");
+    closeSocket(c.sock);
+    return;
+  }
+  vector<char> buffer (IO_BUFFER_SIZE);
+  char*buf=&buffer[0];
+  TrailerChecker upcheck;
+  while(1){
+    int r=recv(c.sock,buf,IO_BUFFER_SIZE,0);
+    if(r<0){
+        closeSocket(serverSock);closeSocket(c.sock);
+        return ;
+    }
+    if(r==0){
+        break;
+    }
+
+    string body=upcheck.feed(buf,r);
+    if(!body.empty()&& !sendAll(serverSock,body.data(),body.size())){
+        sendError(c.sock,"backend faided");
+        closeSocket(serverSock);
+        closeSocket(c.sock);
+        return ;
+    }
+
+    
+  }
+  if(!upcheck.verify()){
+    sendError(c.sock,"Upload checksum mismatch");
+     closeSocket(serverSock);
+    closeSocket(c.sock);
+     return ;
+
+  }
+  uint32_t upCrc=upcheck.getCrc();
+  sendAll(serverSock,(const char*)&upCrc,4);
+  shutdown(serverSock, SHUT_WR);
+
+  TrailerChecker downcheck;
+  while(1){
+    int r= recv(serverSock,buf,IO_BUFFER_SIZE,0);
+    if(r<=0){
+        break;
+    }
+    string body = downcheck.feed(buf,r);
+    if(!body.empty()&& !sendAll(c.sock,body.data(),body.size()))
+        break;
+  }
+  if(downcheck.verify()){
+    uint32_t downCRC=downcheck.getCrc();
+    sendAll(c.sock,(const char*)&downCRC,4);
+    
+  }
+  closeSocket(serverSock);
+ closeSocket(c.sock);
+
+
 }
 
 
@@ -271,6 +377,35 @@ void acceptLoop(int listenSock)
     //   Otherwise enqueue the client socket.
     // Never wait for the server here, so new clients are always accepted quickly.
     // If accept() fails, print the error and keep going (do not end the thread).
+     while (flag)
+    {
+        sockaddr_in addr;
+        int len = sizeof(addr);
+        int client = accept(listenSock, (sockaddr *)&addr, &len);
+        if (client < 0)
+        {
+            cout << "accept failed" << endl;
+            continue;
+        }
+        ClientInfo c;
+        c.sock = client;
+        c.address = inet_ntoa(addr.sin_addr);
+        c.port = ntohs(addr.sin_port);
+        c.arrivedAt = time(NULL);
+
+        queueMutex.lock();
+        if (pendingClients.size() >= MAX_PENDING_CLIENTS)
+        {
+            queueMutex.unlock();
+            sendError(client, "server busy, try again later");
+            closeSocket(client);
+        }
+        else
+        {
+            pendingClients.enqueue(c);
+            queueMutex.unlock();
+        }
+    }
 }
 void dispatcherLoop()
 {
@@ -278,6 +413,31 @@ void dispatcherLoop()
     // Repeat:
     //   Lock queueMutex, take ONE client out of the queue if there is one, unlock.
     //   If we got a client: call relayOneClient(). The next client is taken out of the queue only after this one is finished.
+     while (flag)
+    {
+        bool gotclient = false;
+        ClientInfo c;
+
+        queueMutex.lock();
+        if (!pendingClients.isEmpty())
+        {
+            c = pendingClients.dequeue();
+            gotclient = true;
+        }
+        queueMutex.unlock();
+
+        if (!gotclient)
+        {
+            this_thread::sleep_for(chrono::milliseconds(50));
+            continue;
+        }
+        if (time(NULL) - c.arrivedAt > 30)
+        {
+            closeSocket(c.sock);     
+            continue;
+        }
+        relayOneClient(c);
+    }
 }
 
 void handler(int sg) {
@@ -287,9 +447,22 @@ void handler(int sg) {
 int main(int argc, char *argv[])
 {
 
-    signal(SIGINT, handler); // whenever ctrl+c will be pressed to exit the program the flag wll be set so insead of using infinite loop you can loop on flag to safely close things and exit
-    // 2. listenSock = createListenSocket(LB_PORT).
-    // 3. Start a thread that runs acceptLoop(listenSock) and detach it.
-    // 4. Call dispatcherLoop().
+     startNetwork();
+    signal(SIGINT, handler);
+    if (argc >= 3)
+    {
+        serverHost = argv[1];
+        serverPort = atoi(argv[2]);
+    }
+
+    int listenSock = createListenSocket(lbPort);
+    cout << "load balancer on port " << lbPort << ", server at "
+         << serverHost << ":" << serverPort << endl;
+
+    thread acceptor(acceptLoop, listenSock);
+    acceptor.detach();
+
+    dispatcherLoop();
+    closeSocket(listenSock);
     return 0;
 }
