@@ -63,7 +63,7 @@ using namespace std;
 // ---- Constants ----
 const char *SERVER_PATH = "./server";      // the program we start when the server is down
 // const int IO_BUFFER_SIZE = 64 * 1024;      // fixed buffer for moving bytes
-const int LISTEN_BACKLOG = 16;             // connections the OS holds until accept() takes them
+// const int LISTEN_BACKLOG = 16;             // connections the OS holds until accept() takes them
 const int MAX_PENDING_CLIENTS = 8;         // clients allowed to wait in our queue. More than this get "server busy".
 const int STARTUP_MAX_ATTEMPTS = 50;       // after starting the server, how many times we try to connect
 const int STARTUP_POLL_INTERVAL_MS = 100;  // wait between those tries (50 x 100 ms = 5 seconds in total)
@@ -190,27 +190,30 @@ int createListenSocket(int port)
     // set SO_REUSEADDR so we can restart the load balancer right away.
     // bind() to the port on any address, then listen(LISTEN_BACKLOG).
     // If bind or listen fails, print the error and exit, because without this socket we cannot work.
-    int sock=socket(AF_INET,SOCK_STREAM,0);
-    if(sock<0){
-        cout<<"ERROR: cant create socket"<<endl;
+    int sock=(int)socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+    if(sock==INVALID_SOCKET){
+        cout<<" socket creation fail:::"<<WSAGetLastError()<<endl;
         exit(1);
     }
     int yes=1;
     setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(const char *)&yes, sizeof(yes));
-    sockaddr_in addr;
-    memset(&addr,0,sizeof(addr));
+    sockaddr_in addr{};
+    // memset(&addr,0,sizeof(addr));
     addr.sin_family=AF_INET;
     addr.sin_addr.s_addr=htonl(INADDR_ANY);
     addr.sin_port=htons(port);
 
-    if(bind(sock,(sockaddr *)&addr,sizeof(addr))<0){
-        cout<<"ERROR: cannot listen"<<endl;
+    if(bind(sock,(sockaddr *)&addr,sizeof(addr))==SOCKET_ERROR){
+        cout<<"ERROR: cannot listen"<<WSAGetLastError()<<endl;
+        closeSocket(sock);
         exit(1);
     }
-    if(listen(sock,LISTEN_BACKLOG)<0){
-        cout<<"ERROR: listen faied"<<endl;
+    if(listen(sock,LISTEN_BACKLOG)==SOCKET_ERROR){
+        cout<<"ERROR: listen faied"<<WSAGetLastError()<<endl;
+        closeSocket(sock);
+        exit(1);
     }
-    cout<<" Server listening on port"<<endl;
+    cout<<" Server listening on port"<<port<<endl;
     return sock;
     
 }
@@ -254,7 +257,7 @@ bool startServer(int port)
     // Call system() with it.
     // Return true if system() returned 0, otherwise false.
     #ifdef _WIN32
-        string command ="start/B server.exe"+to_string(port);
+        string command ="start \"\" /B server.exe"+to_string(port);
     #else
         string command="./server "+ to_string(port)+"&";
     #endif
@@ -266,7 +269,7 @@ int connectToServerWithWakeup()
     // 2. Otherwise call startServer(). If it fails, return -1.
     // 3. Try connectToServer() up to STARTUP_MAX_ATTEMPTS times 
     // 4. Return the first working socket, or -1 if the server never came up.
-    int s=connectToHost(serverHost.c_str(),serverPort);
+    int s=connectToServer(serverHost.c_str(),serverPort);
     if(s!=-1){
         return s;
     }
@@ -275,7 +278,7 @@ int connectToServerWithWakeup()
     }
     for(int i=0;i<STARTUP_MAX_ATTEMPTS;i++){
         this_thread::sleep_for(chrono::milliseconds(STARTUP_POLL_INTERVAL_MS));
-        s=connectToHost(serverHost.c_str(),serverPort);
+        s=connectToServer(serverHost.c_str(),serverPort);
             if(s!=-1){
               return s;
             }
@@ -338,7 +341,7 @@ void relayOneClient(ClientInfo &c)
   }
   uint32_t upCrc=upcheck.getCrc();
   sendAll(serverSock,(const char*)&upCrc,4);
-  shutdown(serverSock, SHUT_WR);
+  shutdown(serverSock, SD_SEND);
 
   TrailerChecker downcheck;
   while(1){
