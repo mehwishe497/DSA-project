@@ -149,37 +149,8 @@ class TrailerChecker{
 
 
 };
-bool sendError(int sock,const string &message){
-    string msg=string(1,STATUS_ERROR)+ message;
-    uint32_t crc=crcFinish(crcUpdate(0xFFFFFFFF,msg.data(),msg.size()));
-    if(!sendAll(sock,msg.data(),msg.size())){
-        return false;
-    }
-    return sendAll(sock,(const char *)&crc,4);
-}
-int createListenSocket(int port){
-    int sock=socket(AF_INET,SOCK_STREAM,0);
-    if(sock<0){
-        cout<<"ERROR: cant create socket"<<endl;
-        exit(1);
-    }
-    int yes=1;
-    setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(const char *)&yes, sizeof(yes));
-    sockaddr_in addr;
-    memset(&addr,0,sizeof(addr));
-    addr.sin_family=AF_INET;
-    addr.sin_addr.s_addr=htonl(INADDR_ANY);
-    addr.sin_port=htons(port);
-    if(:: bind(sock,(sockaddr *)&addr,sizeof(addr))<0){
-        cout<<"ERROR: cant bind to port"<<port<<endl;
-        exit(1);
-    }    
-    if(listen (sock,LISTEN_BACKLOG)<0){
-        cout<<"ERROR: listen failed "<<endl;
-        exit(1);
-    }
-    return sock;
-}
+bool sendError(int sock,const string &message);
+int createListenSocket(int port);
 int connectToHost(const char *host,int port){
     int sock=socket(AF_INET,SOCK_STREAM,0);
     if(sock<0){
