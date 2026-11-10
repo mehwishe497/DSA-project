@@ -7,7 +7,8 @@
 //   3. Pass 0X2   -- execute resolve.bin: tokenize ONE line at a time, update the call stack, take a snapshot -> Timeline
 //   4. Pass 0X3   -- serialize Timeline -> session.tdbg(header + snapshot records + dense index)
 
-
+#include<winsock2.h>
+#include<WS2tcpip.h>
 #include <iostream>
 #include <string>
 #include <cstdint>
@@ -21,8 +22,8 @@
 using namespace std;
 
 // ---- Constants ----
-const int32_t MAX_VARS_PER_FRAME = 16;
-const int32_t MAX_STACK_DEPTH = 64;
+// const int32_t MAX_VARS_PER_FRAME = 16;
+// const int32_t MAX_STACK_DEPTH = 64;
 const int32_t MAX_FUNCS = 128;
 const int32_t MAX_TOKENS = MAX_VARS_PER_FRAME + 2; // kW + func_name + upto 16 params/args
 const int32_t MAX_PATCHES = MAX_FUNCS * 4;
@@ -172,25 +173,25 @@ public:
     
 };
 // Core structs
-struct Variable
-{
-    string name;
-    int32_t value;
-};
-struct Frame
-{
-    string func_name;
-    int32_t argc;
-    Variable argv[MAX_VARS_PER_FRAME];
-    int32_t returnLine;
-    Variable locals[MAX_VARS_PER_FRAME];
-    int32_t localCount;
-};
-struct Snapshot
-{
-    Frame callStack[MAX_STACK_DEPTH];
-    int32_t stackDepth;
-};
+// struct Variable
+// {
+//     string name;
+//     int32_t value;
+// };
+// struct Frame
+// {
+//     string func_name;
+//     int32_t argc;
+//     Variable argv[MAX_VARS_PER_FRAME];
+//     int32_t returnLine;
+//     Variable locals[MAX_VARS_PER_FRAME];
+//     int32_t localCount;
+// };
+// struct Snapshot
+// {
+//     Frame callStack[MAX_STACK_DEPTH];
+//     int32_t stackDepth;
+// };
 Timeline::~Timeline()
 {
     TimelineNode* curr = head;
@@ -202,13 +203,13 @@ Timeline::~Timeline()
         curr = next;
     }
 }
-struct TTDBHeader
-{
-    char magic[4]; // "TTDB"
-    int32_t version;
-    int32_t stepCount;
-    int64_t indexOffset;
-};
+// struct TTDBHeader
+// {
+//     char magic[4]; // "TTDB"
+//     int32_t version;
+//     int32_t stepCount;
+//     int64_t indexOffset;
+// };
 void writeHeader(FILE* f, const TTDBHeader& h)
 {
     fwrite(h.magic, 1, 4, f);
@@ -450,6 +451,7 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
+
 enum TokenType
 {
     KEYWORD,
