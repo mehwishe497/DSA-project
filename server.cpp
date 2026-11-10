@@ -460,7 +460,7 @@ enum TokenType
 };
 struct Token
 {
-    TokenType type;
+    int type;
     string text;
 };
 int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
