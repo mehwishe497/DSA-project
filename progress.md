@@ -48,4 +48,9 @@ socket wlay tak ig
 i have implemented few functions and at the end my computer stopped working buz of storage problem i am still figuring in out what the problem 
 load_balancer.pp s  i debug the code and dure to libraries i was getting error so i copied librarirs
 
+14
+ nov i haave completed helper.h
+15 nov 2026
+i have implented few funvtion of clienrt dfunction
+
 
