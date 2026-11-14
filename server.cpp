@@ -16,13 +16,15 @@
 //#include <sys/socket.h>
 #include <cstdint>
 #include <cstdio>
+#include <sstream>
+#include <vector>
 #include<stdexcept>
 #include"helper.h"
 using namespace std;
 
 // ---- Constants ----
-const int32_t MAX_VARS_PER_FRAME = 16;
-const int32_t MAX_STACK_DEPTH = 64;
+// const int32_t MAX_VARS_PER_FRAME = 16;
+// const int32_t MAX_STACK_DEPTH = 64;
 const int32_t MAX_FUNCS = 128;
 const int32_t MAX_TOKENS = MAX_VARS_PER_FRAME + 2; // kW + func_name + upto 16 params/args
 const int32_t MAX_PATCHES = MAX_FUNCS * 4;
@@ -172,25 +174,25 @@ public:
     
 };
 // Core structs
-struct Variable
-{
-    string name;
-    int32_t value;
-};
-struct Frame
-{
-    string func_name;
-    int32_t argc;
-    Variable argv[MAX_VARS_PER_FRAME];
-    int32_t returnLine;
-    Variable locals[MAX_VARS_PER_FRAME];
-    int32_t localCount;
-};
-struct Snapshot
-{
-    Frame callStack[MAX_STACK_DEPTH];
-    int32_t stackDepth;
-};
+// struct Variable
+// {
+//     string name;
+//     int32_t value;
+// };
+// struct Frame
+// {
+//     string func_name;
+//     int32_t argc;
+//     Variable argv[MAX_VARS_PER_FRAME];
+//     int32_t returnLine;
+//     Variable locals[MAX_VARS_PER_FRAME];
+//     int32_t localCount;
+// };
+// struct Snapshot
+// {
+//     Frame callStack[MAX_STACK_DEPTH];
+//     int32_t stackDepth;
+// };
 Timeline::~Timeline()
 {
     TimelineNode* curr = head;
@@ -202,13 +204,13 @@ Timeline::~Timeline()
         curr = next;
     }
 }
-struct TTDBHeader
-{
-    char magic[4]; // "TTDB"
-    int32_t version;
-    int32_t stepCount;
-    int64_t indexOffset;
-};
+// struct TTDBHeader
+// {
+//     char magic[4]; // "TTDB"
+//     int32_t version;
+//     int32_t stepCount;
+//     int64_t indexOffset;
+// };
 void writeHeader(FILE* f, const TTDBHeader& h)
 {
     fwrite(h.magic, 1, 4, f);
@@ -450,15 +452,28 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
-enum TokenType
+
+// enum TokenType
+// {
+//     KEYWORD,
+//     IDENTIFIER,
+//     PARAM
+// };
+// struct Token
+// {
+//     int type;
+//     
+//     string text;
+// };
+enum TokType
 {
-    KEYWORD,
-    IDENTIFIER,
-    PARAM
+    TOK_KEYWORD,
+    TOK_IDENTIFIER,
+    TOK_PARAM
 };
 struct Token
 {
-    TokenType type;
+    TokType type;
     string text;
 };
 int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
@@ -481,13 +496,13 @@ int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
             i++;
         }
         if (count == 0) {
-            tokens[count].type = KEYWORD;
+            tokens[count].type = TOK_KEYWORD;
         }
         else if (count == 1) {
-            tokens[count].type = IDENTIFIER;
+            tokens[count].type = TOK_IDENTIFIER;
         }
         else {
-            tokens[count].type = PARAM;
+            tokens[count].type = TOK_PARAM;
         }
         tokens[count].text = word;
         count++;
@@ -803,27 +818,27 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath)
 }
 // main section
 
-int32_t main()
-{
-    if (!validateProgram("source.bin"))
-    {
-        cout << "Validation failed" << endl;
-        return 1;
-    }
+// int32_t main()
+// {
+//     if (!validateProgram("source.bin"))
+//     {
+//         cout << "Validation failed" << endl;
+//         return 1;
+//     }
 
-    int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
-    if (mainOffset == -1)
-    {
-        cout << "Resolve failed" << endl;
-        return 1;
-    }
+//     int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
+//     if (mainOffset == -1)
+//     {
+//         cout << "Resolve failed" << endl;
+//         return 1;
+//     }
 
-    Timeline timeline;
-    executeProgram("resolve.bin", mainOffset, timeline);
+//     Timeline timeline;
+//     executeProgram("resolve.bin", mainOffset, timeline);
 
-    writeTdbg(timeline, "session.tdbg");
-    cout << "steps recorded: " << timeline.getStepCount() << endl;
-    cout << "session.tdbg written" << endl;
+//     writeTdbg(timeline, "session.tdbg");
+//     cout << "steps recorded: " << timeline.getStepCount() << endl;
+//     cout << "session.tdbg written" << endl;
 
-    return 0;
-}
+//     return 0;
+// }

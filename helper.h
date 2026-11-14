@@ -6,7 +6,8 @@
 #include<cstdint>
 #include<cstring>
 #ifdef _WIN32
-#include<winsock.h>
+#include<winsock2.h>
+#include<WS2tcpip.h>
 #pragma comment (lib,"ws2_32.lib")
 #define MSG_NOSIGNAL 0
 #define SHUT_WR SD_SEND
@@ -60,13 +61,13 @@ struct TTDBHeader
     int32_t stepCount;
     int64_t indexOffset;
 };
-void startNetwork(){
+inline void startNetwork(){
     #ifdef _WIN32
         WSADATA data;
         WSAStartup(MAKEWORD(2,2),&data);
     #endif
 }
-bool sendAll(int sock, const char *buf, size_t n) 
+inline bool sendAll(int sock, const char *buf, size_t n) 
 {
     // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
     // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
@@ -81,7 +82,7 @@ bool sendAll(int sock, const char *buf, size_t n)
      return true;
  }
  
-bool recvAll(int sock, char *buf, size_t n)
+inline bool recvAll(int sock, char *buf, size_t n)
 {
     // recv() can return fewer bytes than asked for, so keep calling it until exactly n bytes are read.
     // Return false if the connection closes or fails before n bytes arrive.
@@ -95,7 +96,7 @@ bool recvAll(int sock, char *buf, size_t n)
     }
      return true;
 }
-uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
+inline uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
     for(size_t i=0;i<n;i++){
         crc=crc^(unsigned char )data[i];
         for(int bit=0;bit<8;bit++){
@@ -111,7 +112,7 @@ uint32_t crcUpdate(uint32_t crc, const char *data, size_t n){
     }
     return crc;
 }
-uint32_t crcFinish(uint32_t crc){
+inline uint32_t crcFinish(uint32_t crc){
     return crc^0xFFFFFFFF;
 }
 
@@ -149,38 +150,54 @@ class TrailerChecker{
 
 
 };
-bool sendError(int sock,const string &message){
-    string msg=string(1,STATUS_ERROR)+ message;
-    uint32_t crc=crcFinish(crcUpdate(0xFFFFFFFF,msg.data(),msg.size()));
+// bool sendError(int sock,const string &message);
+// int createListenSocket(int port);
+bool sendError(int sock, const string &message)
+{
+    // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
+    // For an error: send one byte with value 1, then the message text. 
+    string msg =string(1,STATUS_ERROR)+message;
+    uint32_t crc=crcUpdate(0xFFFFFFFF,msg.data(),msg.size());
+    crc=crcFinish(crc);
     if(!sendAll(sock,msg.data(),msg.size())){
         return false;
     }
     return sendAll(sock,(const char *)&crc,4);
 }
-int createListenSocket(int port){
-    int sock=socket(AF_INET,SOCK_STREAM,0);
-    if(sock<0){
-        cout<<"ERROR: cant create socket"<<endl;
+int createListenSocket(int port)
+{ 
+    // Create a TCP socket with SOCK_CLOEXEC(flag).
+    // set SO_REUSEADDR so we can restart the load balancer right away.
+    // bind() to the port on any address, then listen(LISTEN_BACKLOG).
+    // If bind or listen fails, print the error and exit, because without this socket we cannot work.
+    int sock=(int)socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+    if(sock==INVALID_SOCKET){
+        cout<<" socket creation fail:::"<<WSAGetLastError()<<endl;
         exit(1);
     }
     int yes=1;
     setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(const char *)&yes, sizeof(yes));
-    sockaddr_in addr;
-    memset(&addr,0,sizeof(addr));
+    sockaddr_in addr{};
+    // memset(&addr,0,sizeof(addr));
     addr.sin_family=AF_INET;
     addr.sin_addr.s_addr=htonl(INADDR_ANY);
     addr.sin_port=htons(port);
-    if(:: bind(sock,(sockaddr *)&addr,sizeof(addr))<0){
-        cout<<"ERROR: cant bind to port"<<port<<endl;
-        exit(1);
-    }    
-    if(listen (sock,LISTEN_BACKLOG)<0){
-        cout<<"ERROR: listen failed "<<endl;
+
+    if(bind(sock,(sockaddr *)&addr,sizeof(addr))==SOCKET_ERROR){
+        cout<<"ERROR: cannot listen"<<WSAGetLastError()<<endl;
+        closeSocket(sock);
         exit(1);
     }
+    if(listen(sock,LISTEN_BACKLOG)==SOCKET_ERROR){
+        cout<<"ERROR: listen faied"<<WSAGetLastError()<<endl;
+        closeSocket(sock);
+        exit(1);
+    }
+    cout<<" Server listening on port"<<port<<endl;
     return sock;
+    
 }
-int connectToHost(const char *host,int port){
+inline int connectToHost(const char *host,int port){
     int sock=socket(AF_INET,SOCK_STREAM,0);
     if(sock<0){
        return -1;
