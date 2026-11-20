@@ -151,8 +151,7 @@ class TrailerChecker{
 
 };
 
-// bool sendError(int sock,const string &message);
-// int createListenSocket(int port);
+
 inline bool sendError(int sock, const string &message)
 {
     // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
@@ -165,7 +164,7 @@ inline bool sendError(int sock, const string &message)
     }
     return sendAll(sock,(const char *)&crc,4);
 }
-int createListenSocket(int port)
+inline int createListenSocket(int port)
 { 
     // Create a TCP socket with SOCK_CLOEXEC(flag).
     // set SO_REUSEADDR so we can restart the load balancer right away.
@@ -184,7 +183,7 @@ int createListenSocket(int port)
     addr.sin_addr.s_addr=htonl(INADDR_ANY);
     addr.sin_port=htons(port);
 
-    if(bind(sock,(sockaddr *)&addr,sizeof(addr))==SOCKET_ERROR){
+    if(::bind(sock,(sockaddr *)&addr,sizeof(addr))==SOCKET_ERROR){
         cout<<"ERROR: cannot listen"<<WSAGetLastError()<<endl;
         closeSocket(sock);
         exit(1);

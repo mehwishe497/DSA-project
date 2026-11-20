@@ -315,19 +315,19 @@ bool validateProgram(const char* sourcePath)
         string i = firstWord(line);
         if (i == "func") {
             if (secondWord(line).empty()) {
-                cout << "error......line " << line_no << " func has no name " << endl;
+                cout << "error......(line " << line_no << " ): func has no name " << endl;
                 return false;
 
             }
             if (!m.isEmpty()) {
-                cout << " ERROR nested func not allowed .... func from line" << m.peek() << "is still open " << endl;
+                cout << "Error (line " << line_no << "):nested func not allowed .... func from line" << m.peek() << "is still open " << endl;
                 return false;
             }
             m.push(line_no);
         }
         else if (i == "func_end") {
             if (m.isEmpty()) {
-                cout << " ERROR  line"<<line_no<<" func_end without matching func" << endl;
+                cout << "Error (line " << line_no << "): func_end without matching func" << endl;
 
                 return false;
             }

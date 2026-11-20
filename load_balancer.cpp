@@ -286,7 +286,7 @@ void relayOneClient(ClientInfo &c)
   }
   uint32_t upCrc=upcheck.getCrc();
   sendAll(serverSock,(const char*)&upCrc,4);
-  shutdown(serverSock, SD_SEND);
+  shutdown(serverSock, SHUT_WR);
 
   TrailerChecker downcheck;
   while(1){
@@ -298,11 +298,18 @@ void relayOneClient(ClientInfo &c)
     if(!body.empty()&& !sendAll(c.sock,body.data(),body.size()))
         break;
   }
-  if(downcheck.verify()){
-    uint32_t downCRC=downcheck.getCrc();
-    sendAll(c.sock,(const char*)&downCRC,4);
-    
-  }
+ if(downcheck.verify()){
+    cout << "SERVER CHECKSUM: OK" << endl;
+
+    uint32_t downCRC = downcheck.getCrc();
+
+    if (!sendAll(c.sock, (const char*)&downCRC, 4)) {
+        cout << "CLIENT CHECKSUM SEND FAILED" << endl;
+    }
+}
+else {
+    cout << "SERVER CHECKSUM: FAILED" << endl;
+}
   closeSocket(serverSock);
  closeSocket(c.sock);
 
