@@ -160,63 +160,6 @@ mutex queueMutex;
 sig_atomic_t flag = 1;
 
 
-// // ---- Basic socket helpers ----
-// bool sendAll(int sock, const char *buf, size_t n) 
-// {
-//     // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
-//     // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
-//      size_t total=0;
-//     //  while(total<n){
-//     //     int sent=send(sock,buf+total,(int)(n-total),0);
-//      }
-
-    
-
-// bool sendError(int sock, const string &message)
-// {
-//     // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
-//     // For an error: send one byte with value 1, then the message text. 
-//     string msg =string(1,STATUS_ERROR)+message;
-//     uint32_t crc=crcUpdate(0xFFFFFFFF,msg.data(),msg.size());
-//     crc=crcFinish(crc);
-//     if(!sendAll(sock,msg.data(),msg.size())){
-//         return false;
-//     }
-//     return sendAll(sock,(const char *)&crc,4);
-// }
-// int createListenSocket(int port)
-// { 
-//     // Create a TCP socket with SOCK_CLOEXEC(flag).
-//     // set SO_REUSEADDR so we can restart the load balancer right away.
-//     // bind() to the port on any address, then listen(LISTEN_BACKLOG).
-//     // If bind or listen fails, print the error and exit, because without this socket we cannot work.
-//     int sock=(int)socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
-//     if(sock==INVALID_SOCKET){
-//         cout<<" socket creation fail:::"<<WSAGetLastError()<<endl;
-//         exit(1);
-//     }
-//     int yes=1;
-//     setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(const char *)&yes, sizeof(yes));
-//     sockaddr_in addr{};
-//     // memset(&addr,0,sizeof(addr));
-//     addr.sin_family=AF_INET;
-//     addr.sin_addr.s_addr=htonl(INADDR_ANY);
-//     addr.sin_port=htons(port);
-
-//     if(bind(sock,(sockaddr *)&addr,sizeof(addr))==SOCKET_ERROR){
-//         cout<<"ERROR: cannot listen"<<WSAGetLastError()<<endl;
-//         closeSocket(sock);
-//         exit(1);
-//     }
-//     if(listen(sock,LISTEN_BACKLOG)==SOCKET_ERROR){
-//         cout<<"ERROR: listen faied"<<WSAGetLastError()<<endl;
-//         closeSocket(sock);
-//         exit(1);
-//     }
-//     cout<<" Server listening on port"<<port<<endl;
-//     return sock;
-    
-// }
 int connectToServer(const char *host, int port)
 {
     // Create a TCP socket (SOCK_CLOEXEC) and connect it to host:port.
@@ -257,7 +200,9 @@ bool startServer(int port)
     // Call system() with it.
     // Return true if system() returned 0, otherwise false.
     #ifdef _WIN32
+
         string command = "start \"\" /B server.exe " + to_string(port);
+
     #else
         string command="./server "+ to_string(port)+"&";
     #endif
@@ -468,4 +413,6 @@ int main(int argc, char *argv[])
     dispatcherLoop();
     closeSocket(listenSock);
     return 0;
+
+    
 }

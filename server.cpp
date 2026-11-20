@@ -453,6 +453,7 @@ int64_t resolveProgram(const char* sourcePath, const char* resolveBinPath)
 
 // PASS 0x2: EXECUTION (tokenization happens here)
 
+
 // enum TokenType
 // {
 //     KEYWORD,
@@ -473,7 +474,11 @@ enum TokType
 };
 struct Token
 {
+
     TokType type;
+
+    
+
     string text;
 };
 int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
@@ -816,29 +821,108 @@ void writeTdbg(Timeline& timeline, const char* tdbgPath)
 
 
 }
-// main section
 
-// int32_t main()
-// {
-//     if (!validateProgram("source.bin"))
-//     {
-//         cout << "Validation failed" << endl;
-//         return 1;
-//     }
+bool receiveSource(int sock, const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    if (f == NULL)
+        return false;
+    TrailerChecker check;
+    vector<char> buf(IO_BUFFER_SIZE);
+    bool firstByte = true;
+    while (true){
+        int r = recv(sock, &buf[0], IO_BUFFER_SIZE, 0);
+        if (r <= 0)
+            break;
+        string body = check.feed(&buf[0], r);
+        if (body.empty())
+            continue;
+        if (firstByte)
+        {
+            body.erase(0, 1);         
+            firstByte = false;
+        }
+        if (!body.empty())
+            fwrite(body.data(), 1, body.size(), f);
+    }
+    fclose(f);
+    return check.verify();
+}
 
-//     int64_t mainOffset = resolveProgram("source.bin", "resolve.bin");
-//     if (mainOffset == -1)
-//     {
-//         cout << "Resolve failed" << endl;
-//         return 1;
-//     }
+void sendTdbgReply(int sock, const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (f == NULL)
+    {
+        sendError(sock, "server could not read session.tdbg");
+        return;
+    }
+    char status = STATUS_OK;
+    uint32_t crc = crcUpdate(0xFFFFFFFF, &status, 1);
+    sendAll(sock, &status, 1);
+    vector<char> buf(IO_BUFFER_SIZE);
+    size_t n;
+    while ((n = fread(&buf[0], 1, IO_BUFFER_SIZE, f)) > 0)
+    {
+        crc = crcUpdate(crc, &buf[0], n);
+        sendAll(sock, &buf[0], n);
+    }
+    fclose(f);
+    crc = crcFinish(crc);
+    sendAll(sock, (const char *)&crc, 4);
+}
 
-//     Timeline timeline;
-//     executeProgram("resolve.bin", mainOffset, timeline);
+void handleClient(int sock)
+{
+    if (!receiveSource(sock, "received.bin"))
+    {
+        sendError(sock, "upload corrupt checksum mismatch");
+        return;
+    }
+    stringstream caught;                              // catch cout text
+    streambuf *oldBuf = cout.rdbuf(caught.rdbuf());
+    bool ok = false;
+    if (validateProgram("received.bin"))
+    {
+        int64_t mainOffset = resolveProgram("received.bin", "resolve.bin");
+        if (mainOffset != -1)
+        {
+            Timeline timeline;
+            executeProgram("resolve.bin", mainOffset, timeline);
+            if (caught.str().empty())
+            {
+                writeTdbg(timeline, "session.tdbg");
+                ok = true;
+            }
+        }
+    }
+    cout.rdbuf(oldBuf);
+    string text = caught.str();
+    if (ok)
+        sendTdbgReply(sock, "session.tdbg");
+    else
+        sendError(sock, text.empty() ? "program could not be processed" : text);
+}
 
-//     writeTdbg(timeline, "session.tdbg");
-//     cout << "steps recorded: " << timeline.getStepCount() << endl;
-//     cout << "session.tdbg written" << endl;
+int main(int argc, char *argv[])
+{
+    startNetwork();
+    int port = 5001;
+    if (argc > 1)
+        port = atoi(argv[1]);
+    int listenSock = createListenSocket(port);
+    cout << "server waiting on port " << port << endl;
+    while (true)
+    {
+        int client = accept(listenSock, NULL, NULL);
+        if (client < 0)
+            continue;
+        handleClient(client);
+        closeSocket(client);
+    }
+    return 0;
+}
 
-//     return 0;
-// }
+
+
+

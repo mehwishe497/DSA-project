@@ -150,9 +150,10 @@ class TrailerChecker{
 
 
 };
+
 // bool sendError(int sock,const string &message);
 // int createListenSocket(int port);
-bool sendError(int sock, const string &message)
+inline bool sendError(int sock, const string &message)
 {
     // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
     // For an error: send one byte with value 1, then the message text. 
@@ -197,6 +198,10 @@ int createListenSocket(int port)
     return sock;
     
 }
+
+bool sendError(int sock,const string &message);
+int createListenSocket(int port);
+
 inline int connectToHost(const char *host,int port){
     int sock=socket(AF_INET,SOCK_STREAM,0);
     if(sock<0){
@@ -213,4 +218,8 @@ inline int connectToHost(const char *host,int port){
         return -1;
     }
     return sock;
+
 }
+
+
+

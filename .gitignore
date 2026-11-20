@@ -20,3 +20,5 @@ session.tdbg
 received.bin
 ttdb_last.tdbg 
 ttdb_other.tdbg
+*.pdb
+*.ilk
